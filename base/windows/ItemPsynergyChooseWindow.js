@@ -1,8 +1,8 @@
 import { Window } from "../Window.js";
 import { CursorControl } from "../utils/CursorControl.js";
-import { party_data } from "../../chars/main_chars.js";
-import { abilities_list } from '../../chars/abilities.js';
-import { items_list } from '../../chars/items.js';
+import { party_data } from "../../initializers/main_chars.js";
+import { abilities_list } from '../../initializers/abilities.js';
+import { items_list } from '../../initializers/items.js';
 import * as numbers from '../../magic_numbers.js';
 
 const PSY_OVERVIEW_WIN_X = 104;
@@ -32,7 +32,7 @@ export class ItemPsynergyChooseWindow {
         this.data = data;
         this.is_psynergy_window = is_psynergy_window;
         this.element_list = this.is_psynergy_window ? abilities_list : items_list;
-        this.element_sprite_sufix = this.is_psynergy_window ? "_ability_icon" : "_item_icon";
+        this.element_sprite_key = this.is_psynergy_window ? "abilities_icons" : "items_icons";
         this.on_choose = on_choose === undefined ? () => {} : on_choose;
         this.on_change = on_change === undefined ? () => {} : on_change;
         this.esc_propagation_priority = esc_propagation_priority + 1;
@@ -105,14 +105,14 @@ export class ItemPsynergyChooseWindow {
     }
 
     set_control() {
-        game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown.add(() => {
+        this.data.esc_input.add(() => {
             if (!this.window_open || !this.window_activated) return;
-            this.data.esc_input.getSignal().halt();
+            this.data.esc_input.halt();
             this.close();
         }, this, this.esc_propagation_priority);
-        game.input.keyboard.addKey(Phaser.Keyboard.ENTER).onDown.add(() => {
+        this.data.enter_input.add(() => {
             if (!this.window_open || !this.window_activated) return;
-            this.data.enter_input.getSignal().halt();
+            this.data.enter_input.halt();
             if (this.is_psynergy_window && this.element_list[this.elements[this.selected_element_index]].is_field_psynergy) {
                 this.close();
             }
@@ -155,7 +155,7 @@ export class ItemPsynergyChooseWindow {
     }
 
     get_cursor_y() {
-        return ELEM_PADDING_TOP + parseInt(numbers.ICON_HEIGHT/2) + this.selected_element_index * (numbers.ICON_HEIGHT + SPACE_BETWEEN_ITEMS);
+        return ELEM_PADDING_TOP + ((numbers.ICON_HEIGHT >> 1)|0) + this.selected_element_index * (numbers.ICON_HEIGHT + SPACE_BETWEEN_ITEMS);
     }
 
     get_elem_per_page() {
@@ -264,15 +264,14 @@ export class ItemPsynergyChooseWindow {
             const y = ELEM_PADDING_TOP + i * (numbers.ICON_HEIGHT + SPACE_BETWEEN_ITEMS);
             const icon_x = x + (numbers.ICON_WIDTH >> 1);
             const icon_y = y + (numbers.ICON_HEIGHT >> 1);
-            const icon_key = elem_key_name + this.element_sprite_sufix;
             const x_elem_name = ELEM_PADDING_LEFT + numbers.ICON_WIDTH + (this.is_psynergy_window ? 2 : 4);
             this.text_sprites_in_window.push(this.window.set_text_in_position(this.element_list[elem_key_name].name, x_elem_name, y + ELEM_NAME_ICON_SHIFT));
             if (this.is_psynergy_window) {
-                this.icon_sprites_in_window.push(this.window.create_at_group(icon_x, icon_y, icon_key));
+                this.icon_sprites_in_window.push(this.window.create_at_group(icon_x, icon_y, this.element_sprite_key, undefined, elem_key_name));
                 this.icon_sprites_in_window[i].anchor.setTo(0.5, 0.5);
             } else {
-                let icon_group = game.add.group();
-                let icon_sprite = icon_group.create(0, 0, icon_key);
+                let icon_group = this.game.add.group();
+                let icon_sprite = icon_group.create(0, 0, this.element_sprite_key, elem_key_name);
                 icon_sprite.anchor.setTo(0.5, 0.5);
                 if (this.item_objs[i].equipped) {
                     icon_group.create(SUB_ICON_X, SUB_ICON_Y, "equipped");

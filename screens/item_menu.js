@@ -1,12 +1,12 @@
 import { CharsMenu } from '../base/menus/CharsMenu.js';
 import { BasicInfoWindow } from '../base/windows/BasicInfoWindow.js';
 import { ItemPsynergyChooseWindow } from '../base/windows/ItemPsynergyChooseWindow.js';
-import { party_data } from '../chars/main_chars.js';
-import { items_list } from '../chars/items.js';
+import { party_data } from '../initializers/main_chars.js';
+import { items_list } from '../initializers/items.js';
 import { Window } from '../base/Window.js';
 import * as numbers from '../magic_numbers.js';
-import { ItemOptionsWindow } from '../base/windows/ItemOptionsWindow.js';
-import { StatsCheckWithItemWindow } from '../base/windows/StatsCheckWithItemWindow.js';
+import { ItemOptionsWindow } from '../base/windows/item/ItemOptionsWindow.js';
+import { StatsCheckWithItemWindow } from '../base/windows/item/StatsCheckWithItemWindow.js';
 import { item_types } from '../base/Item.js';
 
 const GUIDE_WINDOW_X = 104;
@@ -84,9 +84,9 @@ export class ItemMenuScreen {
     }
 
     set_control() {
-        game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown.add(() => {
+        this.data.esc_input.add(() => {
             if (!this.is_open) return;
-            this.data.esc_input.getSignal().halt();
+            this.data.esc_input.halt();
             this.close_menu();
         }, this, this.esc_propagation_priority);
     }
@@ -251,7 +251,7 @@ export class ItemMenuScreen {
                 const item = items_list[item_key_name];
                 const x = TOTAL_BORDER + ITEM_OVERVIEW_WIN_INSIDE_PADDING_H + Math.ceil((counter%ITEM_OVERVIEW_WIN_ICONS_PER_LINE) * (ITEM_OVERVIEW_WIN_SPACE_BETWN_ICO + numbers.ICON_WIDTH));
                 const y = TOTAL_BORDER + ITEM_OVERVIEW_WIN_INSIDE_PADDING_V + parseInt(counter/ITEM_OVERVIEW_WIN_ICONS_PER_LINE) * (ITEM_OVERVIEW_WIN_SPACE_BETWN_LINE + numbers.ICON_HEIGHT);
-                this.item_overview_window.create_at_group(x, y, item_key_name + "_item_icon");
+                this.item_overview_window.create_at_group(x, y, "items_icons", undefined, item_key_name);
                 if (item_obj.equipped) {
                     this.item_overview_window.create_at_group(x + SUB_ICON_X, y + SUB_ICON_Y, "equipped");
                 }

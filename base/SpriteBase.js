@@ -7,18 +7,38 @@ export class SpriteBase {
         }
         this.animations = {};
     }
-    
+
     setActionDirections(action, directions, frame_counts) {
-        this.actions[action].directions = [];
-        this.actions[action].frame_counts = [];
+        this.actions[action].directions = new Array(directions.length);
+        this.actions[action].frame_counts = new Array(directions.length);
+        const frame_count_is_array = Array.isArray(frame_counts);
         for (let i = 0; i < directions.length; ++i) {
-            this.actions[action].directions.push(directions[i]);
-            this.actions[action].frame_counts.push(frame_counts[i]);
+            const frame_count = frame_count_is_array ? frame_counts[i] : frame_counts;
+            this.actions[action].directions[i] = directions[i];
+            this.actions[action].frame_counts[i] = frame_count;
         }
     }
 
     setActionFrameRate(action, frame_rate) {
-        this.actions[action].frame_rate = frame_rate;
+        this.actions[action].frame_rate = {};
+        for (let i = 0; i < this.actions[action].directions.length; ++i) {
+            const direction = this.actions[action].directions[i];
+            let this_frame_rate;
+            if (Array.isArray(frame_rate)) {
+                if (frame_rate.length === 1) {
+                    this_frame_rate = frame_rate[0];
+                } else {
+                    this_frame_rate = frame_rate[i];
+                }
+            } else {
+                this_frame_rate = frame_rate;
+            }
+            this.actions[action].frame_rate[direction] = this_frame_rate;
+        }
+    }
+
+    setActionLoop(action, loop) {
+        this.actions[action].loop = loop;
     }
 
     setActionSpritesheet(action, spritesheet_image_url, spritesheet_json_url) {
@@ -43,11 +63,12 @@ export class SpriteBase {
         }
     }
 
-    addAnimation(action, direction, start, stop, suffix, zeroPad) {
-        if (!(action in this.animations))
+    generateFrameNames(action, direction, start, stop, suffix, zeroPad) {
+        if (!(action in this.animations)) {
             this.animations[action] = {};
+        }
         this.animations[action][direction] = Phaser.Animation.generateFrameNames(
-            action+"/"+direction+"/",
+            `${action}/${direction}/`,
             start,
             stop,
             suffix,
@@ -57,26 +78,27 @@ export class SpriteBase {
 
     setAnimation(sprite, action) {
         const directions = this.actions[action].directions;
-        const frame_rate = this.actions[action].frame_rate;
-        for (let key in directions) {
-            const direction = directions[key];
+        const loop = this.actions[action].loop === undefined ? true : this.actions[action].loop;
+        for (let i = 0; i < directions.length; ++i) {
+            const direction = directions[i];
+            const frame_rate = this.actions[action].frame_rate[direction];
             sprite.animations.add(
-                action + "_" + direction, 
+                action + "_" + direction,
                 this.animations[action][direction], 
-                frame_rate, 
-                true, 
+                frame_rate,
+                Array.isArray(loop) ? loop[i] : loop,
                 false
             );
         }
     }
     
-    addAnimations() {
+    generateAllFrames() {
         for (let action in this.actions) {
             const directions = this.actions[action].directions;
             const frame_counts = this.actions[action].frame_counts;
-            for (let key in directions) {
-                const direction = directions[key];
-                this.addAnimation(action, direction, 0, frame_counts[key], '', 2);
+            for (let i = 0; i < directions.length; ++i) {
+                const direction = directions[i];
+                this.generateFrameNames(action, direction, 0, frame_counts[i] - 1, '', 2);
             }
         }
     }

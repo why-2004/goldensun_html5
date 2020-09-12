@@ -1,90 +1,19 @@
 import * as numbers from './magic_numbers.js';
-import { initialize_main_chars, main_char_list, initialize_classes, party_data } from './chars/main_chars.js';
-import { initialize_abilities, abilities_list, initialize_field_abilities, field_abilities_list } from './chars/abilities.js';
-import { initialize_items, items_list } from './chars/items.js';
-import { initialize_djinni, djinni_list } from './chars/djinni.js';
-import { initialize_enemies, enemies_list } from './chars/enemies.js';
-import { initializeMaps, loadMaps, maps } from './maps/maps.js';
-import { jump_event, jump_near_collision } from './events/jump.js';
-import { set_door_event, door_event_phases } from './events/door.js';
+import { initialize_main_chars, main_char_list, initialize_classes, party_data } from './initializers/main_chars.js';
+import { initialize_abilities, abilities_list, initialize_field_abilities, field_abilities_list } from './initializers/abilities.js';
+import { initialize_items, items_list } from './initializers/items.js';
+import { initialize_djinni, djinni_list } from './initializers/djinni.js';
+import { initialize_enemies, enemies_list } from './initializers/enemies.js';
+import { initialize_maps, load_maps, maps } from './initializers/maps.js';
 import { set_npc_event, trigger_npc_dialog } from './events/npc.js';
-import { config_step, do_step } from './events/step.js';
-import { config_collision_change, do_collision_change } from './events/collision.js';
-import * as climb from './events/climb.js';
-import * as physics from './physics/physics.js';
+import { do_step } from './events/step.js';
 import { initialize_menu } from './screens/menu.js';
-import { config_hero, change_hero_sprite, set_actual_action, update_shadow, stop_hero, init_speed_factors } from './chars/hero_control.js';
-
-var data = {
-    game: undefined,
-    cursors: undefined,
-    hero: undefined,
-    camera_type: undefined,
-    map_collider_layer: undefined,
-    actual_action: "idle",
-    actual_direction: undefined,
-    climb_direction: undefined,
-    x_speed: 0,
-    y_speed: 0,
-    hero_name: undefined,
-    map_name: undefined,
-    shadow: undefined,
-    hero_tile_pos_x: undefined,
-    hero_tile_pos_y: undefined,
-    current_event: undefined,
-    event_activation_process: false,
-    event_timers: {},
-    on_event: false,
-    climbing: false,
-    extra_speed: 0,
-    map_collider: undefined,
-    mapCollisionGroup: undefined,
-    heroCollisionGroup: undefined,
-    npcCollisionGroups: {},
-    psynergyItemCollisionGroups: {},
-    dynamicEventsCollisionGroup: undefined,
-    underlayer_group: undefined,
-    overlayer_group: undefined,
-    npc_group: undefined,
-    teleporting: false,
-    fading_out: false,
-    processing_teleport: false,
-    delta_time: 0,
-    show_fps: undefined,
-    npc_db: undefined,
-    psynergy_items_db: undefined,
-    npc_event: false,
-    active_npc: null,
-    waiting_for_enter_press: false,
-    dialog_manager: null,
-    in_dialog: false,
-    created: false,
-    waiting_to_step: false,
-    step_event_data: {},
-    debug: false,
-    grid: false,
-    waiting_to_change_collision: false,
-    collision_event_data: {},
-    trying_to_push: false,
-    trying_to_push_direction: "",
-    push_timer: null,
-    pushing: false,
-    walking_on_pillars_tiles: new Set(),
-    dynamic_jump_events_bodies: [],
-    scale_factor: 1,
-    menu_open: false,
-    esc_input: null,
-    classes_db: null,
-    abilities_db: null,
-    items_db: null,
-    casting_psynergy: false,
-    hero_color_filters: undefined,
-    map_color_filters: undefined,
-    pasynergy_item_color_filters: undefined,
-    stop_by_colliding: false,
-    force_direction: false,
-    enemies_db: null
-};
+import { TileEvent } from './base/TileEvent.js';
+import { Debug } from './debug.js';
+import { event_triggering } from './events/triggering.js';
+import { load_all } from './initializers/assets_loader.js';
+import { config_hero } from './initializers/hero.js';
+import { Collision } from './base/Collision.js';
 
 //debugging porpouses
 window.maps = maps;
@@ -95,417 +24,317 @@ window.field_abilities_list = field_abilities_list;
 window.djinni_list = djinni_list;
 window.enemies_list = enemies_list;
 window.party_data = party_data;
-window.data = data;
 
-var game = new Phaser.Game(
-    numbers.GAME_WIDTH, //width
-    numbers.GAME_HEIGHT, //height
-    Phaser.WEBGL, //renderer
-    "game", //parent
-    { preload: preload, create: create, update: update, render: render, loadRender: loadRender }, //states
-    false, //transparent
-    false //antialias
-);
-window.game = game;
-data.game = game;
+class GoldenSun {
+    constructor() {
+        this.game = new Phaser.Game(
+            numbers.GAME_WIDTH,
+            numbers.GAME_HEIGHT,
+            Phaser.WEBGL,
+            "game", //dom element id
+            {
+                preload: this.preload.bind(this),
+                create: this.create.bind(this),
+                update: this.update.bind(this),
+                render: this.render.bind(this),
+                loadRender: this.loadRender.bind(this)
+            },
+            false, //transparent
+            false //antialias
+        );
 
-function load_buttons() {
-    game.load.image('psynergy_button', 'assets/images/buttons/psynergy.gif');
-    game.load.image('djinni_button', 'assets/images/buttons/djinni.gif');
-    game.load.image('item_button', 'assets/images/buttons/item.gif');
-    game.load.image('status_button', 'assets/images/buttons/status.gif');
+        //events and game states
+        this.event_timers = {};
+        this.on_event = false;
+        this.teleporting = false;
+        this.waiting_to_step = false;
+        this.step_event_data = {};
+        this.menu_open = false;
+        this.in_battle = false;
+        this.battle_stage = null;
+        this.created = false;
+        this.in_dialog = false;
+        this.frame_counter = 0;
 
-    game.load.image('shift_keyboard', 'assets/images/keyboard/shift.png');
-    game.load.image('tab_keyboard', 'assets/images/keyboard/tab.png');
-}
+        //screen
+        this.fullscreen = false;
+        this.scale_factor = 1;
 
-function load_misc() {
-    game.load.image('shadow', 'assets/images/misc/shadow.jpg');
-    game.load.image('cursor', 'assets/images/misc/cursor.gif');
-    game.load.image('green_arrow', 'assets/images/misc/green_arrow.gif');
-    game.load.image('up_arrow', 'assets/images/misc/up_arrow.gif');
-    game.load.image('down_arrow', 'assets/images/misc/down_arrow.gif');
-    game.load.image('page_arrow', 'assets/images/misc/page_arrow.png');
-    game.load.image('psynergy_aura', 'assets/images/misc/psynergy_aura.png');
-    game.load.image('equipped', 'assets/images/misc/equipped.gif');
-    game.load.atlasJSONHash('psynergy_particle', 'assets/images/spritesheets/psynergy_particle.png', 'assets/images/spritesheets/psynergy_particle.json');
-}
+        //jump
+        this.walking_on_pillars_tiles = new Set();
 
-function preload() {
-    initializeMaps();
-    loadMaps(game);
-    game.load.json('init_db', 'init.json');
-    game.load.json('classes_db', 'assets/dbs/classes_db.json');
-    game.load.json('abilities_db', 'assets/dbs/abilities_db.json');
-    game.load.json('items_db', 'assets/dbs/items_db.json');
-    game.load.json('npc_db', 'assets/dbs/npc_db.json');
-    game.load.json('psynergy_items_db', 'assets/dbs/psynergy_items_db.json');
-    game.load.json('djinni_db', 'assets/dbs/djinni_db.json');
-    game.load.json('enemies_db', 'assets/dbs/enemies_db.json');
-    game.load.script('color_filters', 'plugins/ColorFilters.js');
-    load_misc();
-    load_buttons();
-    game.load.bitmapFont('gs-bmp-font', 'assets/font/golden-sun.png', 'assets/font/golden-sun.fnt');
-    game.load.bitmapFont('gs-item-bmp-font', 'assets/font/gs-item-font.png', 'assets/font/gs-item-font.fnt');
-    initialize_field_abilities(game, data);
-
-    game.time.advancedTiming = true;
-    game.stage.smoothed = false;
-    game.camera.roundPx = true;
-    game.renderer.renderSession.roundPixels = true;
-
-    game.camera.fade(0x0, 1);
-}
-
-function render_loading() {
-    game.debug.text('Loading...', 5, 15, "#00ff00");
-}
-
-function loadRender() {
-    render_loading();
-}
-
-function enter_key_event() {
-    if (data.casting_psynergy) return;
-    trigger_npc_dialog(data);
-}
-
-function toggle_debug() {
-    data.hero.body.debug = !data.hero.body.debug;
-    data.map_collider.body.debug = !data.map_collider.body.debug;
-    for (let i = 0; i < data.npc_group.children.length; ++i) {
-        let sprite = data.npc_group.children[i];
-        if (!sprite.is_npc && !sprite.is_psynergy_item) continue;
-        sprite.body.debug = !sprite.body.debug;
+        //npc
+        this.npc_event = false;
+        this.active_npc = null;
+        this.waiting_for_enter_press = false;
+        this.dialog_manager = null;
     }
-    for (let i = 0; i < data.dynamic_jump_events_bodies.length; ++i) {
-        data.dynamic_jump_events_bodies[i].debug = !data.dynamic_jump_events_bodies[i].debug;
+
+    preload() {
+        load_all(this.game);
+
+        this.enter_input = this.game.input.keyboard.addKey(Phaser.Keyboard.ENTER).onDown;
+        this.esc_input = this.game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown;
+        this.shift_input = this.game.input.keyboard.addKey(Phaser.Keyboard.SHIFT).onDown;
+        this.spacebar_input = this.game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR).onDown;
+
+        initialize_field_abilities(this.game, this);
+
+        this.game.time.advancedTiming = true;
+        this.game.stage.smoothed = false;
+        this.game.camera.roundPx = true;
+        this.game.renderer.renderSession.roundPixels = true;
+
+        this.game.camera.fade(0x0, 1);
     }
-    data.debug = !data.debug;
-}
 
-async function create() {
-    // initializing some vars
-    data.init_db = game.cache.getJSON('init_db'); 
-    data.npc_db = game.cache.getJSON('npc_db');
-    data.psynergy_items_db = game.cache.getJSON('psynergy_items_db');
-    data.classes_db = game.cache.getJSON('classes_db');
-    data.abilities_db = game.cache.getJSON('abilities_db');
-    data.items_db = game.cache.getJSON('items_db');
-    data.djinni_db = game.cache.getJSON('djinni_db');
-    data.enemies_db = game.cache.getJSON('enemies_db');
-    data.hero_color_filters = game.add.filter('ColorFilters');
-    data.map_color_filters = game.add.filter('ColorFilters');
-    data.pasynergy_item_color_filters = game.add.filter('ColorFilters');
+    render_loading() {
+        this.game.debug.text('Loading...', 5, 15, "#00ff00");
+    }
 
-    data.hero_name = data.init_db.hero_key_name;
-    data.actual_direction = data.init_db.initial_direction;
-    data.map_name = data.init_db.map_key_name;
-    data.scale_factor = data.init_db.initial_scale_factor;
-    data.map_collider_layer = data.init_db.map_z_index;
-    party_data.coins = data.init_db.coins;
+    loadRender() {
+        this.render_loading();
+    }
 
-    game.scale.setupScale(data.scale_factor * numbers.GAME_WIDTH, data.scale_factor * numbers.GAME_HEIGHT);
-    window.dispatchEvent(new Event('resize'));
+    async initialize_game_data() {
+        let load_maps_promise_resolve;
+        const load_maps_promise = new Promise(resolve => {
+            load_maps_promise_resolve = resolve;
+        });
+        initialize_maps(this.game, this.maps_db);
+        load_maps(this.game, load_maps_promise_resolve);
+        await load_maps_promise;
 
-    initialize_classes(data.classes_db);
-    initialize_djinni(data.djinni_db);
-    initialize_enemies(data.enemies_db);
+        initialize_classes(this.classes_db);
 
-    let load_abilities_promise_resolve;
-    let load_abilities_promise = new Promise(resolve => {
-        load_abilities_promise_resolve = resolve;
-    });
-    initialize_abilities(game, data.abilities_db, load_abilities_promise_resolve);
-    await load_abilities_promise;
-    
-    let load_items_promise_resolve;
-    let load_items_promise = new Promise(resolve => {
-        load_items_promise_resolve = resolve;
-    });
-    initialize_items(game, data.items_db, load_items_promise_resolve);
-    await load_items_promise;
+        let load_enemies_sprites_promise_resolve;
+        const load_enemies_sprites_promise = new Promise(resolve => {
+            load_enemies_sprites_promise_resolve = resolve;
+        });
+        initialize_enemies(this.game, this.enemies_db, load_enemies_sprites_promise_resolve);
+        await load_enemies_sprites_promise;
 
-    let load_chars_promise_resolve;
-    let load_chars_promise = new Promise(resolve => {
-        load_chars_promise_resolve = resolve;
-    });
-    game.load.json('main_chars_db', 'assets/dbs/main_chars.json').onLoadComplete.addOnce(() => {
-        data.main_chars_db = game.cache.getJSON('main_chars_db');
-        initialize_main_chars(game, data.main_chars_db, load_chars_promise_resolve);
-    });
-    game.load.start();
-    await load_chars_promise;
-
-    //creating groups. Order here is important
-    data.underlayer_group = game.add.group();
-    data.npc_group = game.add.group();
-    data.overlayer_group = game.add.group();
-
-    //initialize screens
-    data.menu_screen = initialize_menu(data);
-    game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR).onDown.add(() => {
-        if (data.casting_psynergy) return;
-        if (!data.menu_open) {
-            data.menu_open = true;
-            stop_hero(data);
-            update_shadow(data);
-            data.menu_screen.open_menu();
-        } else if (data.menu_screen.is_active()) {
-            data.menu_open = false;
-            data.menu_screen.close_menu();
-        }
-    }, this);
-    data.esc_input = game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown.add(() => {
-        if (data.menu_open) {
-            data.menu_open = false;
-            data.menu_screen.close_menu();
-        }
-    }, this);
-
-    //configuring map layers: creating sprites, listing events and setting the layers
-    maps[data.map_name].setLayers(
-        game,
-        data,
-        maps,
-        data.npc_db,
-        data.psynergy_items_db,
-        data.map_name,
-        data.underlayer_group,
-        data.overlayer_group,
-        data.map_collider_layer,
-        data.npc_group
-    ).then(() => {
-        config_hero(data);
-        physics.config_world_physics();
-        physics.config_physics_for_hero(data);
-        physics.config_physics_for_npcs(data);
-        physics.config_physics_for_psynergy_items(data);
-        data.dynamicEventsCollisionGroup = game.physics.p2.createCollisionGroup();
-        physics.config_physics_for_map(data);
-        physics.config_collisions(data);
-        game.physics.p2.updateBoundsCollisionGroup();
-
-        //activate debug mode
-        game.input.keyboard.addKey(Phaser.Keyboard.D).onDown.add(toggle_debug, this);
+        let load_djinni_sprites_promise_resolve;
+        const load_djinni_sprites_promise = new Promise(resolve => {
+            load_djinni_sprites_promise_resolve = resolve;
+        });
+        initialize_djinni(this.game, this.djinni_db, load_djinni_sprites_promise_resolve);
+        await load_djinni_sprites_promise;
         
-        //activate grid mode
-        game.input.keyboard.addKey(Phaser.Keyboard.G).onDown.add(() => {
-            data.grid = !data.grid;
-        }, this);
-
-        //enable full screen
-        game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
-        game.input.onTap.add(function(pointer, isDoubleClick) {  
-            if (isDoubleClick) {
-                game.scale.startFullScreen(true);
-            }  
+        let load_abilities_promise_resolve;
+        const load_abilities_promise = new Promise(resolve => {
+            load_abilities_promise_resolve = resolve;
         });
-        game.scale.onFullScreenChange.add(() => {
-            game.scale.setupScale(numbers.GAME_WIDTH, numbers.GAME_HEIGHT);
-            window.dispatchEvent(new Event('resize'));
+        initialize_abilities(this.game, this.abilities_db, load_abilities_promise_resolve);
+        await load_abilities_promise;
+        
+        let load_items_promise_resolve;
+        const load_items_promise = new Promise(resolve => {
+            load_items_promise_resolve = resolve;
+        });
+        initialize_items(this.game, this.items_db, load_items_promise_resolve);
+        await load_items_promise;
+
+        let load_chars_promise_resolve;
+        const load_chars_promise = new Promise(resolve => {
+            load_chars_promise_resolve = resolve;
+        });
+        initialize_main_chars(this.game, this.main_chars_db, load_chars_promise_resolve);
+        await load_chars_promise;
+
+        //creating groups. Order here is important
+        this.underlayer_group = this.game.add.group();
+        this.npc_group = this.game.add.group();
+        this.overlayer_group = this.game.add.group();
+
+        //initialize screens
+        this.menu_screen = initialize_menu(this.game, this);
+
+        //configuring map layers: creating sprites, listing events and setting the layers
+        await maps[this.map_name].mount_map(this.game, this);
+    }
+
+    async create() {
+        // initializing some vars
+        this.init_db = this.game.cache.getJSON('init_db'); 
+        this.npc_db = this.game.cache.getJSON('npc_db');
+        this.interactable_objects_db = this.game.cache.getJSON('interactable_objects_db');
+        this.classes_db = this.game.cache.getJSON('classes_db');
+        this.abilities_db = this.game.cache.getJSON('abilities_db');
+        this.items_db = this.game.cache.getJSON('items_db');
+        this.djinni_db = this.game.cache.getJSON('djinni_db');
+        this.enemies_db = this.game.cache.getJSON('enemies_db');
+        this.enemies_parties_db = this.game.cache.getJSON('enemies_parties_db');
+        this.maps_db = this.game.cache.getJSON('maps_db');
+        this.main_chars_db = this.game.cache.getJSON('main_chars_db');
+        this.summons_db = this.game.cache.getJSON('summons_db');
+        this.hero_color_filters = this.game.add.filter('ColorFilters');
+        this.map_color_filters = this.game.add.filter('ColorFilters');
+        this.pasynergy_item_color_filters = this.game.add.filter('ColorFilters');
+
+        this.hero_name = this.init_db.hero_key_name;
+        this.map_name = this.init_db.map_key_name;
+        this.scale_factor = this.init_db.initial_scale_factor;
+        this.map_collider_layer = this.init_db.map_z_index;
+        party_data.coins = this.init_db.coins;
+
+        //format some db structures
+        this.interactable_objects_db = _.mapKeys(this.interactable_objects_db, interactable_object_data => interactable_object_data.key_name);
+        this.enemies_parties_db = _.mapKeys(this.enemies_parties_db, enemy_party_data => enemy_party_data.key_name);
+        this.npc_db = _.mapKeys(this.npc_db, npc_data => npc_data.key_name);
+        this.summons_db = _.mapKeys(this.summons_db, (summon_data, index) => {
+            summon_data.index = parseInt(index);
+            return summon_data.key_name;
         });
 
-        //enable fps show
-        data.show_fps = false;
-        game.input.keyboard.addKey(Phaser.Keyboard.F).onDown.add(function(){
-            data.show_fps = !data.show_fps;
-        }, this);
+        //init debug instance
+        this.debug = new Debug(this.game, this);
+        //init debug controls
+        this.debug.initialize_controls();
 
-        //enable zoom
-        game.input.keyboard.addKey(Phaser.Keyboard.ONE).onDown.add(function(){
-            data.scale_factor = 1;
-            game.scale.setupScale(numbers.GAME_WIDTH, numbers.GAME_HEIGHT);
-            window.dispatchEvent(new Event('resize'));
-        }, this);
-        game.input.keyboard.addKey(Phaser.Keyboard.TWO).onDown.add(function(){
-            data.scale_factor = 2;
-            game.scale.setupScale(data.scale_factor * numbers.GAME_WIDTH, data.scale_factor * numbers.GAME_HEIGHT);
-            window.dispatchEvent(new Event('resize'));
-        }, this);
-        game.input.keyboard.addKey(Phaser.Keyboard.THREE).onDown.add(function(){
-            data.scale_factor = 3;
-            game.scale.setupScale(data.scale_factor * numbers.GAME_WIDTH, data.scale_factor * numbers.GAME_HEIGHT);
-            window.dispatchEvent(new Event('resize'));
-        }, this);
+        await this.initialize_game_data();
 
-        //enable psynergies shortcuts
-        game.input.keyboard.addKey(Phaser.Keyboard.Q).onDown.add(function(){
-            field_abilities_list.move.cast(data.hero_name);
-        }, this);
+        config_hero(this.game, this);
 
-        //enable enter event
-        data.enter_input = game.input.keyboard.addKey(Phaser.Keyboard.ENTER).onDown.add(enter_key_event, this);
+        this.collision = new Collision(this.game, this.hero);
+        this.hero.config_body(this.collision);
+        this.collision.config_collision_groups(maps[data.map_name]);
+        maps[data.map_name].config_all_bodies(this.collision, this.map_collider_layer);
+        this.collision.config_collisions(maps[data.map_name], this.map_collider_layer, this.npc_group);
+        this.game.physics.p2.updateBoundsCollisionGroup();
+
+        this.initialize_game_main_controls();
 
         //set keyboard cursors
-        data.cursors = game.input.keyboard.createCursorKeys();
+        this.cursors = this.game.input.keyboard.createCursorKeys();
 
-        init_speed_factors(data);
-
-        data.created = true;
-        game.camera.resetFX();
-    });
-}
-
-function fire_event(event_key = undefined) {
-    if(data.event_activation_process){
-        if (data.current_event.type === "stair")
-            climb.climbing_event(data, event_key);
-        else if (data.current_event.type === "door") {
-            set_door_event(data);
-        } else if (data.current_event.type === "jump") {
-            if (!data.current_event.active) return;
-            data.on_event = true;
-            data.event_activation_process = false;
-            jump_event(data, event_key);
-        }
+        this.created = true;
+        this.game.camera.resetFX();
     }
-}
 
-function event_triggering() {
-    const event_key = data.hero_tile_pos_x + "_" + data.hero_tile_pos_y;
-    data.current_event = maps[data.map_name].events[event_key];
-    if (!data.current_event.activation_collision_layers.includes(data.map_collider_layer)) return;
-    if (data.current_event.type === "jump") {
-        jump_near_collision(data, event_key);
-    }
-    let right_direction;
-    if (Array.isArray(data.current_event.activation_direction)) {
-        right_direction = data.current_event.activation_direction.includes(data.actual_direction);
-    } else {
-        right_direction = data.actual_direction === data.current_event.activation_direction;
-    }
-    if (!data.climbing) {
-        if (!data.event_activation_process && right_direction && (data.actual_action === "walk" || data.actual_action === "dash")) {
-            if (data.event_timers[event_key] && !data.event_timers[event_key].timer.expired) {
-                return;
+    initialize_game_main_controls() {
+        //set initial zoom
+        this.game.scale.setupScale(this.scale_factor * numbers.GAME_WIDTH, this.scale_factor * numbers.GAME_HEIGHT);
+        window.dispatchEvent(new Event('resize'));
+
+        //enable full screen
+        this.game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
+        this.game.input.onTap.add((pointer, isDoubleClick) => {
+            if (isDoubleClick) {
+                this.game.scale.startFullScreen(true);
             }
-            data.event_activation_process = true;
-            data.event_timers[event_key] = game.time.events.add(numbers.EVENT_TIME, fire_event.bind(null, event_key), this);
-        } else if (data.event_activation_process && (!right_direction || data.actual_action === "idle")) {
-            data.event_activation_process = false;
-        }
-    } else {
-        if (!data.event_activation_process && data.climb_direction === data.current_event.activation_direction && (data.actual_direction === "climb")) {
-            if (data.event_timers[event_key] && !data.event_timers[event_key].timer.expired) {
-                return;
-            }
-            data.event_activation_process = true;
-            data.event_timers[event_key] = game.time.events.add(numbers.EVENT_TIME, fire_event.bind(null, event_key), this);
-        } else if (data.event_activation_process && (data.climb_direction !== data.current_event.activation_direction ||  data.actual_direction === "idle")) {
-            data.event_activation_process = false;
-        }
+        });
+        this.game.scale.onFullScreenChange.add(() => {
+            this.fullscreen = !this.fullscreen;
+            this.scale_factor = 1;
+            this.game.scale.setupScale(numbers.GAME_WIDTH, numbers.GAME_HEIGHT);
+            window.dispatchEvent(new Event('resize'));
+        });
+
+        //enable zoom
+        this.game.input.keyboard.addKey(Phaser.Keyboard.ONE).onDown.add(() => {
+            if (this.fullscreen) return;
+            this.scale_factor = 1;
+            this.game.scale.setupScale(numbers.GAME_WIDTH, numbers.GAME_HEIGHT);
+            window.dispatchEvent(new Event('resize'));
+        });
+        this.game.input.keyboard.addKey(Phaser.Keyboard.TWO).onDown.add(() => {
+            if (this.fullscreen) return;
+            this.scale_factor = 2;
+            this.game.scale.setupScale(this.scale_factor * numbers.GAME_WIDTH, this.scale_factor * numbers.GAME_HEIGHT);
+            window.dispatchEvent(new Event('resize'));
+        });
+        this.game.input.keyboard.addKey(Phaser.Keyboard.THREE).onDown.add(() => {
+            if (this.fullscreen) return;
+            this.scale_factor = 3;
+            this.game.scale.setupScale(this.scale_factor * numbers.GAME_WIDTH, this.scale_factor * numbers.GAME_HEIGHT);
+            window.dispatchEvent(new Event('resize'));
+        });
+
+        //enable psynergies shortcuts for testing
+        this.game.input.keyboard.addKey(Phaser.Keyboard.Q).onDown.add(() => {
+            if (this.hero.climbing || this.menu_open || this.hero.pushing || this.teleporting || this.hero.jumping || this.in_battle) return;
+            field_abilities_list.move.cast(this.init_db.initial_shortcuts.move);
+        });
+        this.game.input.keyboard.addKey(Phaser.Keyboard.W).onDown.add(() => {
+            if (this.hero.climbing || this.menu_open || this.hero.pushing || this.teleporting || this.hero.jumping || this.in_battle) return;
+            field_abilities_list.frost.cast(this.init_db.initial_shortcuts.frost);
+        });
+        this.game.input.keyboard.addKey(Phaser.Keyboard.E).onDown.add(() => {
+            if (this.hero.climbing || this.menu_open || this.hero.pushing || this.teleporting || this.hero.jumping || this.in_battle) return;
+            field_abilities_list.growth.cast(this.init_db.initial_shortcuts.growth);
+        });
+
+        //enable event trigger key
+        this.enter_input.add(() => {
+            if (this.hero.casting_psynergy || this.hero.climbing || this.hero.pushing || this.teleporting || this.hero.jumping || this.in_battle || !this.created) return;
+            trigger_npc_dialog(this.game, this);
+        });
     }
 
-    if (data.current_event.type === "speed") { //speed event activation
-        if(data.extra_speed !== data.current_event.speed)
-            data.extra_speed = data.current_event.speed;
-    } else if (data.current_event.type === "door") { //door event activation
-        if (!data.current_event.advance_effect) {
-            data.event_activation_process = true;
-            fire_event();
+    update() {
+        if (!this.created) {
+            this.render_loading();
+            return;
         }
-    } else if (data.current_event.type === "step" && !data.waiting_to_step) {
-        config_step(data);
-    } else if (data.current_event.type === "collision" && !data.waiting_to_change_collision) {
-        config_collision_change(data);
-    }
-}
+        if (!this.on_event && !this.npc_event && !this.hero.pushing && !this.menu_open && !this.hero.casting_psynergy && !this.in_battle) {
+            this.hero.update_tile_position(maps[this.map_name].sprite);
 
-function update() {
-    if (data.created) {
-        if (!data.on_event && !data.npc_event && !data.pushing && !data.menu_open && !data.casting_psynergy) {
-            data.hero_tile_pos_x = parseInt(data.hero.x/maps[data.map_name].sprite.tileWidth);
-            data.hero_tile_pos_y = parseInt(data.hero.y/maps[data.map_name].sprite.tileHeight);
-
-            if (data.waiting_to_step) { //step event
-                do_step(data);
+            if (this.waiting_to_step) { //step event
+                do_step(this);
             }
-            if (data.waiting_to_change_collision) { //change collision pattern layer event
-                do_collision_change(data);
+            if (this.collision.waiting_to_change_collision) { //change collision pattern layer event
+                this.collision.do_collision_change(this);
             }
 
             //check if the actual tile has an event
-            if ((data.hero_tile_pos_x + "_" + data.hero_tile_pos_y) in maps[data.map_name].events) {
-                event_triggering();
-            } else if (data.extra_speed !== 0) { //disabling speed event
-                data.extra_speed = 0;
+            const event_location_key = TileEvent.get_location_key(this.hero.tile_x_pos, this.hero.tile_y_pos);
+            if (event_location_key in maps[this.map_name].events) {
+                event_triggering(this.game, this, event_location_key);
+            } else if (this.hero.extra_speed !== 0) { //disabling speed event
+                this.hero.extra_speed = 0;
             }
 
-            physics.set_speed_factors(data);
-            set_actual_action(data); //chooses which sprite the hero shall assume
-            data.delta_time = game.time.elapsedMS/numbers.DELTA_TIME_FACTOR;
-            physics.calculate_hero_speed(data);
-            physics.collision_dealer(data);
-            change_hero_sprite(data);
+            this.hero.update(maps[this.map_name]); //update hero position/velocity/sprite
 
-            update_shadow(data);
+            maps[data.map_name].collision_sprite.body.velocity.y = maps[data.map_name].collision_sprite.body.velocity.x = 0; //fixes map body
 
-            data.map_collider.body.velocity.y = data.map_collider.body.velocity.x = 0; //fixes map body
-
-            for (let i = 0; i < maps[data.map_name].npcs.length; ++i) { //updates npcs' movement
-                let npc = maps[data.map_name].npcs[i];
+            for (let i = 0; i < maps[this.map_name].npcs.length; ++i) { //updates npcs' movement
+                const npc = maps[this.map_name].npcs[i];
                 npc.update();
             }
 
-            //organize layers on hero move
-            data.npc_group.children.forEach(sprite => {
-                sprite.y_sort = parseInt(sprite.base_collider_layer.toString() + sprite.y.toString());
-            });
-            data.npc_group.sort('y_sort', Phaser.Group.SORT_ASCENDING);
-        } else if (data.on_event) {
-            if (data.current_event.type === "stair") {
-                climb.climb_event_animation_steps(data);
-            } else if (data.current_event.type === "door") {
-                door_event_phases(data);
-            }
-
-            //disabling hero body movement
-            data.hero.body.velocity.y = data.hero.body.velocity.x = 0;
-        } else if (data.npc_event) {
-            set_npc_event(data);
-
-            //disabling hero body movement
-            data.hero.body.velocity.y = data.hero.body.velocity.x = 0;
-        } else if (data.pushing) {
-            change_hero_sprite(data);
+            maps[this.map_name].sort_sprites(this);
+        } else if (this.on_event) {
+            this.hero.stop_char(false);
+        } else if (this.npc_event) {
+            set_npc_event(this.game, this);
+            this.hero.stop_char(false);
+        } else if (this.hero.pushing) {
+            this.hero.set_action();
+        } else if (this.menu_open && this.menu_screen.horizontal_menu.menu_active) {
+            this.hero.stop_char(false);
+            this.menu_screen.update_position();
+        } else if (this.in_battle) {
+            this.battle_instance.update();
         }
-    } else {
-        render_loading();
+
+        this.frame_counter = (this.frame_counter + 1) % numbers.TARGET_FPS;
+    }
+
+    render() {
+        this.debug.set_debug_info();
+        if (this.frame_counter%8 === 0) {
+            this.debug.fill_key_debug_table();
+        }
+        if (this.frame_counter%(numbers.TARGET_FPS >> 1) === 0) {
+            this.debug.fill_stats_debug_table();
+        }
     }
 }
 
-function render() {
-    game.debug.text('', 0, 0);
+var golden_sun = new GoldenSun();
 
-    if (data.show_fps) {
-        game.debug.text('FPS: ' + game.time.fps || 'FPS: --', 5, 15, "#00ff00");
-    }
-
-    if (data.grid) {
-        const tile_width = maps[data.map_name].sprite.tileWidth;
-        for (let x = 0; x < game.world.width; x += tile_width) {
-            game.debug.geom(new Phaser.Line(x, 0, x, game.world.height), 'rgba(0,255,255,0.35)', false, 4);
-        }
-        const tile_height = maps[data.map_name].sprite.tileHeight;
-        for (let y = 0; y < game.world.height; y += tile_height) {
-            game.debug.geom(new Phaser.Line(0, y, game.world.width, y), 'rgba(0,255,255,0.35)', false, 4);
-        }
-        let x_pos = data.hero_tile_pos_x*tile_width;
-        let y_pos = data.hero_tile_pos_y*tile_height;
-        game.debug.geom(new Phaser.Rectangle(x_pos, y_pos, tile_width, tile_height), 'rgba(255,0,0,0.5)');
-        game.debug.geom(new Phaser.Circle(data.hero.x, data.hero.y, 5), 'rgba(20,75,0,1.0)');
-        for (let point in maps[data.map_name].events) {
-            let pos = point.split('_');
-            game.debug.geom(new Phaser.Rectangle(pos[0]*tile_width, pos[1]*tile_height, tile_width, tile_height), 'rgba(255,255,60,0.7)');
-        }
-
-        if (game.input.mousePointer.withinGame) {
-            const mouse_x = parseInt((game.camera.x + game.input.mousePointer.x/data.scale_factor)/maps[data.map_name].sprite.tileWidth);
-            const mouse_y = parseInt((game.camera.y + game.input.mousePointer.y/data.scale_factor)/maps[data.map_name].sprite.tileHeight);
-            game.debug.text(`x: ${mouse_x}, y: ${mouse_y}`, 140, 15, "#00ff00");
-        } else {
-            game.debug.text(`x: --, y: --`, 140, 15, "#00ff00");
-        }
-    }
-}
+//debugging porpouses
+window.game = golden_sun.game;
+window.data = golden_sun;

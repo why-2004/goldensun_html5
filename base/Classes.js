@@ -1,5 +1,5 @@
-import { classes_list, class_table } from '../chars/main_chars.js';
-import { elements } from './MainChar.js';
+import { classes_list, class_table } from '../initializers/main_chars.js';
+import { elements } from '../utils.js';
 
 export class Classes {
     constructor(
@@ -16,7 +16,8 @@ export class Classes {
         agi_boost,
         luk_boost,
         ability_level_pairs,
-        class_type
+        class_type,
+        vulnerabilities
     ) {
         this.key_name = key_name;
         this.name = name;
@@ -32,6 +33,7 @@ export class Classes {
         this.luk_boost = luk_boost;
         this.ability_level_pairs = ability_level_pairs;
         this.class_type = class_type;
+        this.vulnerabilities = vulnerabilities === undefined ? [] : vulnerabilities;
     }
 }
 
@@ -47,17 +49,17 @@ export function choose_right_class(element_afinity, venus_lvl, mercury_lvl, mars
     if (no_secondary) {
         secondary_afinity = element_afinity;
     } else {
-        secondary_afinity = _.max(secondary_elements, element => element.level).element;
+        secondary_afinity = _.maxBy(secondary_elements, element => element.level).element;
     }
     const class_type = class_table[element_afinity][secondary_afinity];
-    let classes = _.where(Object.values(classes_list), {class_type: class_type});
+    let classes = Object.values(classes_list).filter(this_class => this_class.class_type === class_type);
     classes = classes.filter(this_class => {
         return this_class.required_venus_level <= venus_lvl &&
         this_class.required_mercury_level <= mercury_lvl &&
         this_class.required_mars_level <= mars_lvl &&
         this_class.required_jupiter_level <= jupiter_lvl;
     });
-    return _.sortBy(classes, this_class => {
+    return _.sortBy(classes, [this_class => {
         return this_class.required_venus_level + this_class.required_mercury_level + this_class.required_mars_level + this_class.required_jupiter_level;
-    }).reverse()[0];
+    }]).reverse()[0];
 }

@@ -1,8 +1,8 @@
 import { CharsMenu } from '../base/menus/CharsMenu.js';
 import { BasicInfoWindow } from '../base/windows/BasicInfoWindow.js';
 import { ItemPsynergyChooseWindow } from '../base/windows/ItemPsynergyChooseWindow.js';
-import { party_data } from '../chars/main_chars.js';
-import { abilities_list, field_abilities_list } from '../chars/abilities.js';
+import { party_data } from '../initializers/main_chars.js';
+import { abilities_list, field_abilities_list } from '../initializers/abilities.js';
 import { Window } from '../base/Window.js';
 import * as numbers from '../magic_numbers.js';
 
@@ -66,9 +66,9 @@ export class PsynergyMenuScreen {
     }
 
     set_control() {
-        game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown.add(() => {
+        this.data.esc_input.add(() => {
             if (!this.is_open) return;
-            this.data.esc_input.getSignal().halt();
+            this.data.esc_input.halt();
             this.close_menu();
         }, this, this.esc_propagation_priority);
     }
@@ -130,7 +130,7 @@ export class PsynergyMenuScreen {
                 if (ability.is_field_psynergy || ability.effects_outside_battle) {
                     const x = TOTAL_BORDER + PSY_OVERVIEW_WIN_INSIDE_PADDING_H + Math.ceil((counter%PSY_OVERVIEW_WIN_ICONS_PER_LINE) * (PSY_OVERVIEW_WIN_SPACE_BETWN_ICO + numbers.ICON_WIDTH));
                     const y = TOTAL_BORDER + PSY_OVERVIEW_WIN_INSIDE_PADDING_V + parseInt(counter/PSY_OVERVIEW_WIN_ICONS_PER_LINE) * (PSY_OVERVIEW_WIN_SPACE_BETWN_LINE + numbers.ICON_HEIGHT);
-                    this.psynergy_overview_window.create_at_group(x, y, ability_key_name + "_ability_icon");
+                    this.psynergy_overview_window.create_at_group(x, y, "abilities_icons", undefined, ability_key_name);
                     ++counter;
                 }
             }

@@ -15210,7 +15210,7 @@ PIXI.DisplayObject.prototype = {
         var wt = this.worldTransform;
 
         // temporary matrix variables
-        var a, b, c, d, tx, ty;
+        var a, b, c, d, tx, ty, no_round_tx, no_round_ty;
 
         // so if rotation is between 0 then we can simplify the multiplication process..
         if (this.rotation % Phaser.Math.PI2)
@@ -15255,6 +15255,8 @@ PIXI.DisplayObject.prototype = {
             d = this.scale.y;
             tx = this.position.x - this.pivot.x * a;
             ty = this.position.y - this.pivot.y * d;
+            no_round_tx = this.position.no_round_x - this.pivot.x * a;
+            no_round_ty = this.position.no_round_y - this.pivot.y * d;
 
             wt.a = a * pt.a;
             wt.b = a * pt.b;
@@ -15262,6 +15264,8 @@ PIXI.DisplayObject.prototype = {
             wt.d = d * pt.d;
             wt.tx = tx * pt.a + ty * pt.c + pt.tx;
             wt.ty = tx * pt.b + ty * pt.d + pt.ty;
+            wt.no_round_tx = no_round_tx * pt.a + no_round_ty * pt.c + pt.tx;
+            wt.no_round_ty = no_round_tx * pt.b + no_round_ty * pt.d + pt.ty;
         }
 
         a = wt.a;
@@ -15297,6 +15301,8 @@ PIXI.DisplayObject.prototype = {
         this.worldAlpha = this.alpha * p.worldAlpha;
         this.worldPosition.x = wt.tx;
         this.worldPosition.y = wt.ty;
+        this.worldPosition.no_round_x = wt.no_round_tx;
+        this.worldPosition.no_round_y = wt.no_round_ty;
 
         // reset the bounds each time this is called!
         this._currentBounds = null;
@@ -19902,8 +19908,13 @@ PIXI.WebGLSpriteBatch.prototype.render = function (sprite, matrix)
     var b = wt.b / resolution;
     var c = wt.c / resolution;
     var d = wt.d / resolution;
-    var tx = wt.tx;
-    var ty = wt.ty;
+    var tx = sprite.roundPx ? Math.ceil(wt.tx) : wt.tx;
+    var ty = sprite.roundPx ? Math.ceil(wt.ty) : wt.ty;
+
+    if (sprite.disableRoundPx) {
+        tx = (sprite.position.x + sprite.game.world.worldTransform.no_round_tx)|0;
+        ty = (sprite.position.y + sprite.game.world.worldTransform.no_round_ty)|0;
+    }
 
     var ch = texture.crop.height;
 
@@ -19942,7 +19953,7 @@ PIXI.WebGLSpriteBatch.prototype.render = function (sprite, matrix)
     var tint = sprite.tint;
     var color = (tint >> 16) + (tint & 0xff00) + ((tint & 0xff) << 16) + (sprite.worldAlpha * 255 << 24);
 
-    if (this.renderSession.roundPixels)
+    if (this.renderSession.roundPixels && !sprite.disableRoundPx)
     {
         positions[i++] = a * w1 + c * h1 + tx | 0;
         positions[i++] = d * h1 + b * w1 + ty | 0;
@@ -29849,6 +29860,8 @@ Phaser.Camera.prototype = {
 
         if (this.roundPx)
         {
+            this.view.no_round_x = this.view.x;
+            this.view.no_round_y = this.view.y;
             this.view.floor();
             this._shake.x = Math.floor(this._shake.x);
             this._shake.y = Math.floor(this._shake.y);
@@ -29856,6 +29869,8 @@ Phaser.Camera.prototype = {
 
         this.displayObject.position.x = -this.view.x;
         this.displayObject.position.y = -this.view.y;
+        this.displayObject.position.no_round_x = -this.view.no_round_x;
+        this.displayObject.position.no_round_y = -this.view.no_round_y;
 
     },
 
@@ -29938,6 +29953,8 @@ Phaser.Camera.prototype = {
 
         this._targetPosition.x = this.view.x + this.target.worldPosition.x;
         this._targetPosition.y = this.view.y + this.target.worldPosition.y;
+        this._targetPosition.no_round_x = this.view.no_round_x + this.target.body.x + this.target.parent.worldPosition.x;
+        this._targetPosition.no_round_y = this.view.no_round_y + this.target.body.y + this.target.parent.worldPosition.y;
 
         if (this.deadzone)
         {
@@ -29946,10 +29963,12 @@ Phaser.Camera.prototype = {
             if (this._edge < this.deadzone.left)
             {
                 this.view.x = this.game.math.linear(this.view.x, this._targetPosition.x - this.deadzone.left, this.lerp.x);
+                this.view.no_round_x = this.game.math.linear(this.view.no_round_x, this._targetPosition.no_round_x - this.deadzone.left, this.lerp.x);
             }
             else if (this._edge > this.deadzone.right)
             {
                 this.view.x = this.game.math.linear(this.view.x, this._targetPosition.x - this.deadzone.right, this.lerp.x);
+                this.view.no_round_x = this.game.math.linear(this.view.no_round_x, this._targetPosition.no_round_x - this.deadzone.right, this.lerp.x);
             }
 
             this._edge = this._targetPosition.y - this.view.y;
@@ -29957,22 +29976,29 @@ Phaser.Camera.prototype = {
             if (this._edge < this.deadzone.top)
             {
                 this.view.y = this.game.math.linear(this.view.y, this._targetPosition.y - this.deadzone.top, this.lerp.y);
+                this.view.no_round_y = this.game.math.linear(this.view.no_round_y, this._targetPosition.no_round_y - this.deadzone.top, this.lerp.y);
             }
             else if (this._edge > this.deadzone.bottom)
             {
                 this.view.y = this.game.math.linear(this.view.y, this._targetPosition.y - this.deadzone.bottom, this.lerp.y);
+                this.view.no_round_y = this.game.math.linear(this.view.no_round_y, this._targetPosition.no_round_y - this.deadzone.bottom, this.lerp.y);
             }
         }
         else
         {
             this.view.x = this.game.math.linear(this.view.x, this._targetPosition.x - this.view.halfWidth, this.lerp.x);
             this.view.y = this.game.math.linear(this.view.y, this._targetPosition.y - this.view.halfHeight, this.lerp.y);
+            this.view.no_round_x = this.game.math.linear(this.view.no_round_x, this._targetPosition.no_round_x - this.view.halfWidth, this.lerp.x);
+            this.view.no_round_y = this.game.math.linear(this.view.no_round_y, this._targetPosition.no_round_y - this.view.halfHeight, this.lerp.y);
         }
 
         if (this.bounds)
         {
             this.checkBounds();
         }
+
+        this.displayObject.position.no_round_x = -this.view.no_round_x;
+        this.displayObject.position.no_round_y = -this.view.no_round_y;
 
         if (this.roundPx)
         {
@@ -30022,6 +30048,7 @@ Phaser.Camera.prototype = {
         {
             this.atLimit.x = true;
             this.view.x = this.bounds.x * this.scale.x;
+            this.view.no_round_x = this.view.x;
 
             if (!this._shake.shakeBounds)
             {
@@ -30033,6 +30060,7 @@ Phaser.Camera.prototype = {
         {
             this.atLimit.x = true;
             this.view.x = (this.bounds.right * this.scale.x) - this.width;
+            this.view.no_round_x = this.view.x;
 
             if (!this._shake.shakeBounds)
             {
@@ -30045,6 +30073,7 @@ Phaser.Camera.prototype = {
         {
             this.atLimit.y = true;
             this.view.y = this.bounds.top * this.scale.y;
+            this.view.no_round_y = this.view.y;
 
             if (!this._shake.shakeBounds)
             {
@@ -30056,6 +30085,7 @@ Phaser.Camera.prototype = {
         {
             this.atLimit.y = true;
             this.view.y = (this.bounds.bottom * this.scale.y) - this.height;
+            this.view.no_round_y = this.view.y;
 
             if (!this._shake.shakeBounds)
             {
@@ -74939,9 +74969,24 @@ Phaser.Animation = function (game, parent, name, frameData, frames, frameRate, l
     this._frames = this._frames.concat(frames);
 
     /**
+    * @property {number} _frameIndex
+    * @private
+    * @default
+    */
+   this._frameIndex = 0;
+
+    /**
     * @property {number} delay - The delay in ms between each frame of the Animation, based on the given frameRate.
     */
-    this.delay = 1000 / frameRate;
+    this.frameRate = frameRate;
+    if (Array.isArray(frameRate))
+    {
+        this.delay = 1000 / frameRate[this._frameIndex];
+    }
+    else
+    {
+        this.delay = 1000 / frameRate;
+    }
 
     /**
     * @property {boolean} loop - The loop state of the Animation.
@@ -74983,13 +75028,6 @@ Phaser.Animation = function (game, parent, name, frameData, frames, frameRate, l
     * @default
     */
     this._pauseStartTime = 0;
-
-    /**
-    * @property {number} _frameIndex
-    * @private
-    * @default
-    */
-    this._frameIndex = 0;
 
     /**
     * @property {number} _frameDiff
@@ -75064,11 +75102,18 @@ Phaser.Animation.prototype = {
     */
     play: function (frameRate, loop, killOnComplete)
     {
+        this._frameIndex = this.isReversed ? this._frames.length - 1 : 0;
 
         if (typeof frameRate === 'number')
         {
             //  If they set a new frame rate then use it, otherwise use the one set on creation
             this.delay = 1000 / frameRate;
+            this.frameRate = frameRate;
+        }
+        else if (Array.isArray(frameRate))
+        {
+            this.delay = 1000 / this.frameRate[this._frameIndex];
+            this.frameRate = frameRate;
         }
 
         if (typeof loop === 'boolean')
@@ -75091,7 +75136,8 @@ Phaser.Animation.prototype = {
         this._timeLastFrame = this.game.time.time;
         this._timeNextFrame = this.game.time.time + this.delay;
 
-        this._frameIndex = this.isReversed ? this._frames.length - 1 : 0;
+        this.updateDelay();
+
         this.updateCurrentFrame(false, true);
 
         this._parent.events.onAnimationStart$dispatch(this._parent, this);
@@ -75289,6 +75335,20 @@ Phaser.Animation.prototype = {
     },
 
     /**
+    * Updates this animation delay.
+    *
+    * @method Phaser.Animation#updateDelay
+    */
+    updateDelay: function ()
+    {
+        if (Array.isArray(this.frameRate))
+        {
+            const index = (this._frameIndex + (this.isReversed ? -1 : 1)) % this.frameRate.length;
+            this.delay = 1000 / this.frameRate[index < 0 ? this.frameRate.length - 1 : index];
+        }
+    },
+
+    /**
     * Updates this animation. Called automatically by the AnimationManager.
     *
     * @method Phaser.Animation#update
@@ -75329,6 +75389,8 @@ Phaser.Animation.prototype = {
                 this._frameIndex += this._frameSkip;
             }
 
+            this.updateDelay();
+
             if (!this.isReversed && this._frameIndex >= this._frames.length || this.isReversed && this._frameIndex <= -1)
             {
                 if (this.loop)
@@ -75356,7 +75418,6 @@ Phaser.Animation.prototype = {
                     if (this.onUpdate)
                     {
                         this.onUpdate.dispatch(this, this.currentFrame);
-
                         // False if the animation was destroyed from within a callback
                         return !!this._frameData;
                     }
@@ -101266,8 +101327,13 @@ Phaser.Physics.P2.Body.prototype = {
     postUpdate: function ()
     {
 
-        this.sprite.x = this.world.mpxi(this.data.position[0]) + this.offset.x;
-        this.sprite.y = this.world.mpxi(this.data.position[1]) + this.offset.y;
+        if (this.sprite.roundPx) {
+            this.sprite.x = (this.world.mpxi(this.data.position[0]) + this.offset.x) | 0;
+            this.sprite.y = (this.world.mpxi(this.data.position[1]) + this.offset.y) | 0;
+        } else {
+            this.sprite.x = this.world.mpxi(this.data.position[0]) + this.offset.x;
+            this.sprite.y = this.world.mpxi(this.data.position[1]) + this.offset.y;
+        }
 
         if (!this.fixedRotation)
         {
@@ -104121,6 +104187,11 @@ Phaser.Tilemap = function (game, key, tileWidth, tileHeight, width, height)
     this.tilesets = data.tilesets;
 
     /**
+    * @property {array} tilesets - An object with animatedTiles information.
+    */
+    this.animatedTiles = data.animatedTiles;
+
+    /**
     * @property {array} imagecollections - An array of Image Collections.
     */
     this.imagecollections = data.imagecollections;
@@ -106363,9 +106434,60 @@ Phaser.TilemapLayer.ensureSharedCopyCanvas = function ()
 */
 Phaser.TilemapLayer.prototype.preUpdate = function ()
 {
+    const return_value = this.preUpdateCore();
+    this.map.animatedTiles.updated = false;
+    return return_value;
 
-    return this.preUpdateCore();
+};
 
+	/**
+* Automatically called by World.update. Handles animated tiles.
+*
+* @method Phaser.TilemapLayer#update
+* @protected
+*/
+Phaser.TilemapLayer.prototype.update = function () {
+    var tile;
+    // Update is called on all tilemap layers but only required, and wanted, once. Also skip if there is no defined animated tiles.
+    if(this.map.animatedTiles.updated || Object.keys(this.map.animatedTiles).length===1){
+        return;
+    }
+    this.map.animatedTiles.updated = true;
+
+    for (var gid in this.map.animatedTiles)
+    {
+        if(gid==="updated"){ continue; }
+
+        if (!this.map.animatedTiles[gid].msToNextFrame)
+        {
+            this.map.animatedTiles[gid].msToNextFrame = this.map.animatedTiles[gid].frames[this.map.animatedTiles[gid].currentFrame].duration;
+        }
+        else if ((this.map.animatedTiles[gid].msToNextFrame-=this.game.time.physicsElapsedMS)<=0)
+        {
+            this.map.animatedTiles[gid].currentFrame++;
+            if (this.map.animatedTiles[gid].currentFrame > (this.map.animatedTiles[gid].frames.length - 1))
+            {
+                this.map.animatedTiles[gid].currentFrame = 0;
+            }
+            this.map.animatedTiles[gid].currentGid = this.map.animatedTiles[gid].frames[this.map.animatedTiles[gid].currentFrame].gid;
+            this.map.animatedTiles[gid].msToNextFrame += this.map.animatedTiles[gid].frames[this.map.animatedTiles[gid].currentFrame].duration;
+            for (var layer in this.map.animatedTiles[gid].layers)
+            {
+                //Check if there is any animated tiles within camera view before setting dirty = true
+                if(this.map.layers[this.map.animatedTiles[gid].layers[layer]].dirty){continue;}
+                tileLoop:
+                for(var x2 = Math.ceil((this.game.camera.x+this.game.camera.width)/this.map.tileWidth), x = Math.floor(this.game.camera.x/this.map.tileWidth); x<x2; x+=1){
+                    for(var y2 = Math.ceil((this.game.camera.y+this.game.camera.height)/this.map.tileHeight), y = Math.floor(this.game.camera.y/this.map.tileHeight); y<y2; y+=1) {
+                        tile = this.map.getTile(x,y,this.map.layers[this.map.animatedTiles[gid].layers[layer]].name);
+                        if(tile && tile.index == gid){
+                            this.map.layers[this.map.animatedTiles[gid].layers[layer]].dirty = true;
+                            break tileLoop;
+                        }
+                    }
+                }
+            }
+        }
+    }
 };
 
 /**
@@ -107037,6 +107159,10 @@ Phaser.TilemapLayer.prototype.renderRegion = function (scrollX, scrollY, left, t
 
             if (set)
             {
+                if (this.map.animatedTiles.hasOwnProperty(index))
+                {
+                    index = this.map.animatedTiles[index].currentGid;
+                }
                 if (tile.rotation || tile.flipped)
                 {
                     context.save();
@@ -108087,10 +108213,56 @@ Phaser.TilemapParser = {
         var imagecollections = [];
         var lastSet = null;
 
+        // Array with animated tiles information
+        map.animatedTiles = {"updated": false};
+
         for (var i = 0; i < json.tilesets.length; i++)
         {
             //  name, firstgid, width, height, margin, spacing, properties
             var set = json.tilesets[i];
+
+            if (set.hasOwnProperty('tiles'))
+            {
+                var tileIndices = Object.keys(set.tiles);
+                for (var k in tileIndices)
+                {
+                    if (set.tiles[tileIndices[k]].hasOwnProperty('animation'))
+                    {
+                        gid = parseInt(tileIndices[k],10) + set.firstgid;
+                        map.animatedTiles[gid] = ({
+                            frames: [],
+                            currentFrame: 0,
+                            msToNextFrame: false //timestamp is set in first call to Phaser.TilemapLayer#update
+                        });
+                        for (var i2 in set.tiles[tileIndices[k]].animation)
+                        {
+                            map.animatedTiles[gid].frames[i2] = {};
+                            map.animatedTiles[gid].frames[i2].gid = set.tiles[tileIndices[k]].animation[i2].tileid + set.firstgid;
+                            map.animatedTiles[gid].frames[i2].duration = set.tiles[tileIndices[k]].animation[i2].duration;
+                        }
+                        // Keep track of layers with this particular animated tile
+                        var layersWithAnimatedTile = [];
+                        var tilelayerIndex = 0;
+                        for (var i2 = 0; i2 < json.layers.length; i2++)
+                        {
+                            if (json.layers[i2].type === 'tilelayer')
+                            {
+                                for (var t = 0, len = json.layers[i2].data.length; t < len; t++)
+                                {
+                                    if (json.layers[i2].data[t] === gid)
+                                    {
+                                        layersWithAnimatedTile.push(tilelayerIndex);
+                                        break;
+                                    }
+                                }
+                                tilelayerIndex++;
+                            }
+                        }
+                        map.animatedTiles[gid].currentGid = map.animatedTiles[gid].frames[0].gid;
+                        map.animatedTiles[gid].layers = layersWithAnimatedTile;
+                    }
+                }
+            }
 
             if (set.source)
             {

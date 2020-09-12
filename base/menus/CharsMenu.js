@@ -1,5 +1,5 @@
 import { Window } from '../Window.js';
-import { party_data } from '../../chars/main_chars.js';
+import { party_data } from '../../initializers/main_chars.js';
 import * as numbers from '../../magic_numbers.js';
 import { CursorControl } from '../utils/CursorControl.js';
 
@@ -72,23 +72,23 @@ export class CharsMenu {
             this.char_buttons[key_name].destroy();
         }
         this.char_buttons = {};
-        for (let i = 0; i < party_data.members.length; ++i) {
+        for (let i = 0; i < _.clamp(party_data.members.length, 0, MAX_PER_LINE); ++i) {
             const char = party_data.members[i];
             this.char_buttons[char.key_name] = this.group.create(0, 0, char.key_name + "_idle");
-            party_data.members[i].setAnimation(this.char_buttons[char.key_name], "idle");
+            party_data.members[i].sprite_base.setAnimation(this.char_buttons[char.key_name], "idle");
             this.char_buttons[char.key_name].animations.play("idle_down");
         }
     }
 
     set_control() {
-        game.input.keyboard.addKey(Phaser.Keyboard.ENTER).onDown.add(() => {
+        this.data.enter_input.add(() => {
             if (!this.menu_open || !this.menu_active) return;
-            this.data.enter_input.getSignal().halt();
+            this.data.enter_input.halt();
             this.on_choose(this.selected_button_index);
         }, this, this.enter_propagation_priority);
-        game.input.keyboard.addKey(Phaser.Keyboard.ESC).onDown.add(() => {
+        this.data.esc_input.add(() => {
             if (!this.menu_open || !this.menu_active) return;
-            this.data.esc_input.getSignal().halt();
+            this.data.esc_input.halt();
             this.on_cancel();
         }, this, this.esc_propagation_priority);
     }
@@ -96,7 +96,7 @@ export class CharsMenu {
     update_position() {
         this.group.x = this.game.camera.x + this.x;
         this.group.y = this.game.camera.y + this.y;
-        for (let i = 0; i < party_data.members.length; ++i) {
+        for (let i = 0; i < _.clamp(party_data.members.length, 0, MAX_PER_LINE); ++i) {
             const char = party_data.members[i];
             this.char_buttons[char.key_name].centerX = i * SLOT_WIDTH + SLOT_WIDTH_CENTER + numbers.OUTSIDE_BORDER_WIDTH + numbers.INSIDE_BORDER_WIDTH;
             this.char_buttons[char.key_name].y = this.unselected_y;
@@ -126,10 +126,10 @@ export class CharsMenu {
     }
 
     open(select_index, start_active = true) {
-        if (Object.keys(this.char_buttons).length != party_data.members.length) {
+        if (Object.keys(this.char_buttons).length != _.clamp(party_data.members.length, 0, MAX_PER_LINE)) {
             this.set_chars();
         }
-        this.buttons_number = party_data.members.length;
+        this.buttons_number = _.clamp(party_data.members.length, 0, MAX_PER_LINE);
         this.selected_button_index = select_index === undefined ? 0 : select_index;
         this.line_index = 0;
         this.update_position();
